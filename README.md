@@ -2,25 +2,30 @@
 
 # SHL Assessment Recommendation System
 
-This project implements an **LLM-based assessment recommendation system** that helps hiring managers and recruiters identify the most relevant **SHL Individual Test Solutions** based on a natural language query or job description.
+## Overview
 
-The system replaces manual keyword-based search with **semantic retrieval**, improving efficiency, relevance, and balance across skill domains.
+Hiring managers and recruiters often struggle to identify the right assessments for a role due to keyword-based search limitations.  
+This project implements an **LLM-based semantic recommendation system** that recommends relevant **SHL Individual Test Solutions** based on a natural language query or job description.
+
+The solution uses **transformer-based embeddings**, **vector similarity search**, and a **re-ranking pipeline** to deliver balanced and relevant recommendations across technical and behavioral skills.
 
 ---
 
-##  Features
+## Key Capabilities
 
-- Scrapes and structures the SHL product catalog (Individual Test Solutions only)
-- Uses transformer-based embeddings for semantic understanding
-- Efficient vector search using FAISS
-- Re-ranking logic to balance technical and behavioral assessments
+- Scrapes SHL’s product catalog directly from the SHL website
+- Uses only **Individual Test Solutions** (Pre-packaged Job Solutions excluded)
+- Parses and stores structured assessment metadata
+- Transformer-based semantic embeddings (LLM)
+- Efficient retrieval using FAISS
+- Re-ranking logic to balance skill domains
 - REST API for programmatic access
 - Web application for interactive testing
-- Evaluation using Mean Recall@10 on labeled data
+- Evaluation using **Mean Recall@10**
 
 ---
 
-##  System Architecture
+## System Architecture & Pipeline
 
 SHL Website
 ↓
@@ -28,7 +33,7 @@ Scraping & Parsing
 ↓
 Structured Catalog (JSON)
 ↓
-Transformer Embeddings (LLM)
+LLM Embeddings (Sentence Transformers)
 ↓
 FAISS Vector Index
 ↓
@@ -46,33 +51,36 @@ Recommendations (API / Web App)
 ### 1. Data Ingestion & Catalog Construction
 
 - The SHL product catalog is **scraped directly from the SHL website**.
-- Only **Individual Test Solutions** are collected; **Pre-packaged Job Solutions are excluded**.
-- Each assessment is parsed and stored with:
-  - Assessment name
-  - URL
-  - Description
+- Only **Individual Test Solutions** are collected.
+- **Pre-packaged Job Solutions are explicitly excluded**.
+- Each assessment is parsed to extract:
+  - Assessment name  
+  - URL  
+  - Description  
   - Test type (Knowledge & Skills / Personality & Behavior)
-- The cleaned catalog is stored locally to ensure reproducibility.
 
- Output:
+The parsed data is cleaned and stored locally to ensure reproducibility.
+
+**Output:**
 data/assessments.json
 
 
-
-The final dataset contains **more than 377 individual test solutions**, satisfying the problem requirement.
+The final dataset contains **more than 377 individual test solutions**, satisfying the requirement.
 
 ---
 
 ### 2. Embedding & Indexing (LLM Integration)
 
-- A **pretrained transformer-based language model**  
+- A **pretrained transformer-based language model**
   (`sentence-transformers/all-MiniLM-L6-v2`) is used to generate dense semantic embeddings.
-- Assessment embeddings are created from a combination of name, description, and test type.
-- All embeddings are indexed using **FAISS** for fast similarity search.
+- Embeddings are created from assessment name, description, and test type.
+- Vectors are normalized and indexed using **FAISS** for efficient similarity search.
+- The index and metadata are persisted to disk.
 
- Output:
+**Outputs:**
 data/faiss.index
 data/metadata.pkl
+
 
 
 This enables **semantic retrieval**, not keyword matching.
@@ -87,45 +95,59 @@ At inference time, the system executes the following pipeline:
    - Accepts a natural language query or job description.
 
 2. **Text Normalization**
-   - Normalizes text to improve embedding consistency.
+   - Normalizes text for consistent embeddings.
 
 3. **Query Embedding**
    - The query is embedded using the same transformer model.
 
 4. **Vector Retrieval**
-   - FAISS retrieves the top-N most similar assessments.
+   - FAISS retrieves the top-N most semantically similar assessments.
 
 5. **Re-ranking & Filtering**
-   - Lightweight scoring logic improves relevance by:
-     - Boosting skill matches (e.g., Java, Python, SQL)
-     - Encouraging balance between **Knowledge & Skills (K)** and  
-       **Personality & Behavior (P)** assessments when applicable.
+   - Lightweight heuristic scoring:
+     - Boosts skill matches (Java, Python, SQL, etc.)
+     - Encourages balance between:
+       - Knowledge & Skills (K)
+       - Personality & Behavior (P)
 
 6. **Final Recommendation Output**
-   - Returns the top 5–10 assessments with name and URL.
+   - Returns 5–10 relevant assessments with name and URL.
 
 ---
 
-### 4. API & Web Application
+### 4. Memory-Safe Backend Design (Important for Deployment)
 
-- The pipeline is exposed through a **FastAPI-based REST API** with:
-  - Health check endpoint
-  - Recommendation endpoint
+To operate within **512 MB RAM limits** on free deployment tiers:
+
+- The transformer model and FAISS index are **lazy-loaded** (loaded only on the first request).
+- No large models or indexes are loaded at server startup.
+- FAISS uses normalized vectors with inner-product similarity.
+- The API runs with a **single worker**.
+
+This ensures stable deployment without out-of-memory errors.
+
+---
+
+### 5. API & Web Application
+
+- The pipeline is exposed via a **FastAPI REST API**:
+  - `/health` – health check
+  - `/recommend` – assessment recommendations
 - A lightweight **web application** allows users to:
   - Enter job descriptions or queries
-  - View recommended assessments in tabular form
+  - View recommendations in a tabular format
 
 Both components are deployable and accessible via public URLs.
 
 ---
 
-##  Evaluation
+## Evaluation
 
 ### Dataset
 
-- The provided **labeled training dataset** was used for evaluation.
+- The provided **labeled training dataset** is used for evaluation.
 - Each query is associated with one or more **ground-truth SHL assessment URLs**.
-- Queries with multiple relevant assessments were grouped correctly before evaluation.
+- Queries with multiple relevant assessments are grouped correctly.
 
 ---
 
@@ -135,11 +157,12 @@ The system is evaluated using **Mean Recall@10**, as specified.
 
 For a single query:
 
-\[
-Recall@10 = \frac{\text{Number of relevant assessments in top 10}}{\text{Total relevant assessments}}
-\]
+Recall@10 =
+(Number of relevant assessments in top 10 recommendations) /
+(Total relevant assessments for the query)
 
-The final score is computed as the average Recall@10 across all queries.
+
+Mean Recall@10 is computed by averaging Recall@10 across all queries.
 
 ---
 
@@ -156,32 +179,62 @@ The evaluation logic is implemented in a dedicated script to ensure transparency
 
 ### Iteration & Improvements
 
-- Initial retrieval relied solely on vector similarity.
-- Performance was improved by:
-  - Enhancing text used for embeddings
-  - Adding a re-ranking stage
-  - Improving balance between technical and behavioral assessments
+- Initial baseline relied purely on vector similarity.
+- Improvements included:
+  - Enhanced text representations for embeddings
+  - Introduction of a re-ranking stage
+  - Better balance between technical and behavioral assessments
 
-These iterations resulted in measurable improvements in Mean Recall@10.
+These changes resulted in measurable improvements in Mean Recall@10.
 
 ---
 
-##  How to Run Locally
+## How to Run Locally
 
 ### 1. Install dependencies
+```bash
 pip install -r requirements.txt
-
-2. Run crawler (once)
+2. Scrape SHL catalog (run once)
+bash
+Copy code
 python crawler/crawl_shl.py
-
-3. Build embeddings
+3. Build embeddings and FAISS index
+bash
+Copy code
 python embeddings/build_embeddings.py
-
-4. Start API
+4. Start backend API
+bash
+Copy code
 uvicorn api.main:app --reload
-
-5. Start web app
+5. Start web application
+bash
+Copy code
 streamlit run frontend/app.py
+Deployment
+Backend API: Deployed on Render (single worker, lazy-loaded models)
 
- Summary
-This project demonstrates a modern retrieval-augmented recommendation system using transformer-based language models, semantic search, and structured evaluation. The solution is modular, scalable, and aligned with real-world hiring use cases.
+Web Application: Deployed on Streamlit Cloud
+
+Both services are publicly accessible and ready for evaluation.
+
+Submission Artifacts
+Public API endpoint URL
+
+Public web application URL
+
+GitHub repository containing:
+
+Complete implementation
+
+Evaluation scripts
+
+This README documentation
+
+CSV file containing predictions on the unlabeled test set
+
+Summary
+This project implements a modern retrieval-augmented recommendation system using transformer-based language models, semantic search, and structured evaluation.
+The solution is modular, memory-efficient, reproducible, and aligned with real-world hiring and assessment recommendation use cases.
+
+
+
