@@ -1,31 +1,10 @@
-import json
 import faiss
-import pickle
-from sentence_transformers import SentenceTransformer
+import numpy as np
 
-MODEL = SentenceTransformer("all-MiniLM-L6-v2")
+dimension = embeddings.shape[1]
 
-def build_index():
-    with open("data/assessments.json", "r") as f:
-        assessments = json.load(f)
+index = faiss.IndexFlatIP(dimension)  # smaller + faster
+faiss.normalize_L2(embeddings)
 
-    texts = [
-        f"{a['name']} {a['description']} {a['test_type']}"
-        for a in assessments
-    ]
-
-    embeddings = MODEL.encode(texts, show_progress_bar=True)
-
-    dimension = embeddings.shape[1]
-    index = faiss.IndexFlatL2(dimension)
-    index.add(embeddings)
-
-    faiss.write_index(index, "data/faiss.index")
-
-    with open("data/metadata.pkl", "wb") as f:
-        pickle.dump(assessments, f)
-
-    print("Embeddings & index saved")
-
-if __name__ == "__main__":
-    build_index()
+index.add(embeddings)
+faiss.write_index(index, "data/faiss.index")
