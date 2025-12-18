@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Java Programming Test",
+    "url": "https://www.shl.com/solutions/products/java-programming-test/",
+    "description": "Assess Java programming skills",
+    "test_type": "K"
+  },
+  {
+    "name": "Teamwork Assessment",
+    "url": "https://www.shl.com/solutions/products/teamwork-assessment/",
+    "description": "Assess collaboration and teamwork skills",
+    "test_type": "P"
+  },
+  {
+    "name": "Python Coding Test",
+    "url": "https://www.shl.com/solutions/products/python-coding-test/",
+    "description": "Assess Python programming skills",
+    "test_type": "K"
+  }
+]
